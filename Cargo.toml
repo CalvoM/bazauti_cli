@@ -4,8 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bazauti = {git = "https://github.com/CalvoM/bazauti.git"}
+#bazauti = {git = "https://github.com/CalvoM/bazauti.git"}
+bazauti = {path = "../bazauti"}
 clap = { version = "4.6.6", features = ["derive"] }
 comfy-table = "8.0.0"
 cpal = {version = "0.18.2"}
 plotters = {version = "0.3.7"}
+textplots = "0.8.7"
+

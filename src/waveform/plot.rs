@@ -1,10 +1,15 @@
 use bazauti::parser::errors::RenderingError;
 use bazauti::parser::utils::CompressionCode;
-use bazauti::parser::wav::{AudioData, WaveParserContext};
+use bazauti::{AudioData, WaveParserContext};
 use plotters::prelude::*;
+use textplots::{Chart, LabelBuilder, LabelFormat, Plot, Shape};
 
 const WIDTH: u32 = 1600;
 const HEIGHT: u32 = 700;
+
+// Braille canvas size in dots: 2 dots per terminal column, 4 per row.
+const TEXT_WIDTH: u32 = 160;
+const TEXT_HEIGHT: u32 = 48;
 
 #[derive(Clone, Debug)]
 pub struct WaveformRenderer {
@@ -34,6 +39,91 @@ impl WaveformRenderer {
                 .plot_i16(&samples, start_time, duration)
                 .unwrap(),
         }
+    }
+    /// Draws the waveform in the terminal, one chart per channel.
+    pub fn render_text(&self, start_time: f64, duration: f64) -> Result<(), RenderingError> {
+        let sample_rate = self.sample_rate as f64;
+        let channels = usize::from(self.number_of_channels);
+
+        let channel_names: &[&str] = match channels {
+            1 => &["Mono"],
+            2 => &["Left", "Right"],
+            _ => {
+                return Err(RenderingError::ChartSetupError(format!(
+                    "Unsupported channel count: {channels}"
+                )));
+            }
+        };
+
+        // Amplitudes normalised to -1.0..1.0 so that silence sits on the x-axis.
+        let samples: Vec<f32> = match self.data.as_ref() {
+            Some(AudioData::U8(samples)) => samples
+                .iter()
+                .map(|&sample| (f32::from(sample) - 128.0) / 128.0)
+                .collect(),
+            Some(AudioData::I16(samples)) => samples
+                .iter()
+                .map(|&sample| f32::from(sample) / 32768.0)
+                .collect(),
+            None => {
+                return Err(RenderingError::ChartSetupError(
+                    "No audio samples to plot".into(),
+                ));
+            }
+        };
+
+        let start_frame = (start_time * sample_rate) as usize;
+        let frame_count = (duration * sample_rate) as usize;
+
+        let start = (start_frame * channels).min(samples.len());
+        let end = ((start_frame + frame_count) * channels).min(samples.len());
+
+        if start >= end {
+            return Err(RenderingError::ChartSetupError(
+                "Requested time range contains no samples".into(),
+            ));
+        }
+
+        let samples = &samples[start..end];
+
+        for (channel, channel_name) in channel_names.iter().enumerate() {
+            let frames: Vec<f32> = samples
+                .iter()
+                .skip(channel)
+                .step_by(channels)
+                .copied()
+                .collect();
+
+            // There are far more frames than columns, so each column shows the
+            // min/max envelope of the frames that fall into it.
+            let frames_per_column = frames.len().div_ceil(TEXT_WIDTH as usize).max(1);
+            let points: Vec<(f32, f32)> = frames
+                .chunks(frames_per_column)
+                .enumerate()
+                .flat_map(|(i, chunk)| {
+                    let time = (start_time + (i * frames_per_column) as f64 / sample_rate) as f32;
+                    let min = chunk.iter().copied().fold(f32::INFINITY, f32::min);
+                    let max = chunk.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+
+                    [(time, min), (time, max)]
+                })
+                .collect();
+
+            println!("{} Waveform - {channel_name}", self.compression_code);
+            Chart::new_with_y_range(
+                TEXT_WIDTH,
+                TEXT_HEIGHT,
+                start_time as f32,
+                (start_time + duration) as f32,
+                -1.0,
+                1.0,
+            )
+            .x_label_format(LabelFormat::Custom(Box::new(|time| format!("{time:.2}s"))))
+            .lineplot(&Shape::Lines(&points))
+            .display();
+        }
+
+        Ok(())
     }
     fn plot_i16(
         &self,

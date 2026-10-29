@@ -1,10 +1,10 @@
-use bazauti::parser::wav::{AudioData, WAVParser};
+use bazauti::{AudioData, WAVParser};
 use comfy_table::{presets::UTF8_FULL, *};
 
 pub fn summary(parser: &WAVParser) {
-    let metadata = parser.clone().metadata();
+    let metadata = parser.metadata();
     let fmt = &metadata.fmt_metadata;
-    let context = parser.clone().context();
+    let context = parser.context();
 
     let sample_count = match &context.samples {
         Some(AudioData::U8(samples)) => samples.len(),

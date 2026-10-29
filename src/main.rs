@@ -1,5 +1,5 @@
 mod waveform;
-use bazauti::parser::wav::WAVParser;
+use bazauti::WAVParser;
 use bazauti_cli::info::summary::summary;
 use clap::{Parser, Subcommand};
 use waveform::plot::WaveformRenderer;
@@ -44,6 +44,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut parser = WAVParser::new(&path);
             let _ = parser.parse()?;
             let renderer = WaveformRenderer::new(parser.context());
+            renderer.render_text(0.0, 1.5)?;
             renderer.render(0.0, 1.5);
         }
         BazautiCliCommands::Playback { path: _ } => {}
